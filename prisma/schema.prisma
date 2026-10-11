@@ -1,0 +1,383 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+enum Role {
+  INVESTOR
+  PROVIDER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Category {
+  FUND_MANAGER
+  PROPERTY_INVESTOR
+  TRADING_EDUCATOR
+  TRADING_CHANNEL
+  FINANCIAL_ADVISER
+  PORTFOLIO_ANALYST
+  TAX_SPECIALIST
+  MORTGAGE_BROKER
+  SMSF_SPECIALIST
+  INVESTOR_COMMUNITY
+  MARKET_ANALYST
+}
+
+enum ProviderStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  IN_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum DocType {
+  ABN
+  ACN
+  AFSL
+  ID
+  OTHER
+}
+
+enum DocStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum EnquiryType {
+  ENQUIRY
+  CONSULTATION
+}
+
+enum EnquiryStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  BOOKED
+  WON
+  LOST
+  SPAM
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  role             Role              @default(INVESTOR)
+  status           UserStatus        @default(ACTIVE)
+  emailVerifiedAt  DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+
+  investorProfile  InvestorProfile?
+  provider         Provider?
+  enquiries        Enquiry[]
+  reviews          Review[]
+  favourites       Favourite[]
+  compareList      CompareShortlist[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+}
+
+model InvestorProfile {
+  id           String    @id @default(uuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  investorType String?   // BEGINNER, SELF_MANAGED, ACTIVE_TRADER, PROPERTY, SMSF, HNW, CRYPTO, LONG_TERM
+  interests    String[]
+  state        String?
+  riskProfile  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Provider {
+  id                 String             @id @default(uuid())
+  ownerUserId        String             @unique
+  ownerUser          User               @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  companyName        String
+  slug               String             @unique
+  category           Category
+  tagline            String
+  overview           String             @db.Text
+  specialities       String[]
+  serviceRegions     String[]
+  websiteUrl         String?
+  socialLinks        Json?
+  contactEmail       String
+  contactPhone       String?
+  logoUrl            String?
+  minInvestment      String?
+  feeSummary         String?
+  riskProfile        String?
+  aumText            String?
+  status             ProviderStatus     @default(PENDING)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  verifiedBadge      Boolean            @default(false)
+  isFeatured         Boolean            @default(false)
+  featuredUntil      DateTime?
+  avgRating          Float              @default(0.0)
+  reviewCount        Int                @default(0)
+  submittedAt        DateTime?          @default(now())
+  approvedAt         DateTime?
+  approvedBy         String?
+  rejectionReason    String?
+  providerDisclaimer String?            @db.Text
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+
+  services           ProviderService[]
+  team               TeamMember[]
+  documents          VerificationDocument[]
+  enquiries          Enquiry[]
+  reviews            Review[]
+  favourites         Favourite[]
+  compareList        CompareShortlist[]
+  featuredPlacements FeaturedPlacement[]
+
+  @@index([slug])
+  @@index([category, status])
+}
+
+model ProviderService {
+  id          String   @id @default(uuid())
+  providerId  String
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @db.Text
+  type        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TeamMember {
+  id          String   @id @default(uuid())
+  providerId  String
+  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  name        String
+  role        String
+  bio         String?  @db.Text
+  photoUrl    String?
+  linkedinUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model VerificationDocument {
+  id           String    @id @default(uuid())
+  providerId   String
+  provider     Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  docType      DocType
+  fileUrl      String
+  status       DocStatus @default(PENDING)
+  reviewerNote String?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Enquiry {
+  id                     String            @id @default(uuid())
+  investorId             String?
+  investor               User?             @relation(fields: [investorId], references: [id], onDelete: SetNull)
+  providerId             String
+  provider               Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  type                   EnquiryType       @default(ENQUIRY)
+  message                String            @db.Text
+  preferredContactMethod String?
+  preferredTime          String?
+  investorName           String
+  investorEmail          String
+  investorPhone          String?
+  status                 EnquiryStatus     @default(NEW)
+  leadScore              Int               @default(50)
+  aiSummary              String?
+  internalNotes          String?           @db.Text
+  source                 String            @default("DIRECT")
+  createdAt              DateTime          @default(now())
+  statusUpdatedAt        DateTime          @default(now())
+  activities             EnquiryActivity[]
+
+  @@index([providerId, status])
+}
+
+model EnquiryActivity {
+  id         String   @id @default(uuid())
+  enquiryId  String
+  enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  actorId    String?
+  action     String
+  fromStatus String?
+  toStatus   String?
+  note       String?
+  createdAt  DateTime @default(now())
+}
+
+model Review {
+  id             String       @id @default(uuid())
+  providerId     String
+  provider       Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  investorId     String
+  investor       User         @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  rating         Int
+  title          String
+  body           String       @db.Text
+  status         ReviewStatus @default(PENDING)
+  moderatedBy    String?
+  moderatedAt    DateTime?
+  moderationNote String?
+  aiFlag         Boolean      @default(false)
+  aiFlagReason   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([providerId, status])
+}
+
+model Favourite {
+  id         String   @id @default(uuid())
+  investorId String
+  investor   User     @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([investorId, providerId])
+}
+
+model CompareShortlist {
+  id         String   @id @default(uuid())
+  investorId String
+  investor   User     @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([investorId, providerId])
+}
+
+model Article {
+  id             String          @id @default(uuid())
+  slug           String          @unique
+  title          String
+  excerpt        String          @db.Text
+  body           String          @db.Text
+  coverImageUrl  String?
+  categoryId     String
+  category       ArticleCategory @relation(fields: [categoryId], references: [id])
+  authorName     String
+  status         String          @default("PUBLISHED")
+  publishedAt    DateTime?       @default(now())
+  seoTitle       String?
+  seoDescription String?
+  tags           String[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model ArticleCategory {
+  id       String    @id @default(uuid())
+  name     String
+  slug     String    @unique
+  articles Article[]
+}
+
+model SiteContent {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  title     String
+  content   Json
+  updatedAt DateTime @updatedAt
+}
+
+model FeaturedPlacement {
+  id         String   @id @default(uuid())
+  providerId String
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  slot       String
+  startsAt   DateTime
+  endsAt     DateTime
+  sortOrder  Int      @default(0)
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  entityType String
+  entityId   String
+  action     String
+  beforeJson Json?
+  afterJson  Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// Future-Ready Stubs
+model Course {
+  id          String   @id @default(uuid())
+  title       String
+  createdAt   DateTime @default(now())
+}
+
+model Webinar {
+  id          String   @id @default(uuid())
+  title       String
+  createdAt   DateTime @default(now())
+}
+
+model DownloadableResource {
+  id          String   @id @default(uuid())
+  title       String
+  createdAt   DateTime @default(now())
+}
+
+model Subscription {
+  id          String   @id @default(uuid())
+  providerId String
+  createdAt   DateTime @default(now())
+}

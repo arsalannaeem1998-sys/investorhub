@@ -1,0 +1,29 @@
+{
+  "name": "investorhub-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "InvestorHub Australia - Digital Marketplace MVP + AI-Style Admin CRM",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:web": "npm run dev --workspace=@investorhub/web",
+    "dev:api": "npm run dev --workspace=@investorhub/api",
+    "build": "npm run build --workspaces",
+    "db:generate": "npx prisma generate --schema=./prisma/schema.prisma",
+    "db:migrate": "npx prisma migrate dev --schema=./prisma/schema.prisma",
+    "db:push": "npx prisma db push --schema=./prisma/schema.prisma",
+    "db:seed": "npx tsx ./prisma/seed.ts",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "lint": "npm run lint --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prisma": "^5.19.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
